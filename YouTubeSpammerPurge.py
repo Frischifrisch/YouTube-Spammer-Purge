@@ -116,7 +116,8 @@ def print_comments(check_video_id_localprint, comments, logMode):
     for i in range(numDivisions):
       j = print_prepared_comments(check_video_id_localprint,comments[i*50:i*50+50], j, logMode)
     if remainder > 0:
-      j = print_prepared_comments(check_video_id_localprint,comments[numDivisions*50:len(comments)],j, logMode)
+      j = print_prepared_comments(check_video_id_localprint,
+                                  comments[numDivisions * 50:], j, logMode)
   else:
     j = print_prepared_comments(check_video_id_localprint,comments, j, logMode)
 
@@ -130,9 +131,7 @@ def print_prepared_comments(check_video_id_localprep, comments, j, logMode):
     textFormat="plainText"
   ).execute()
 
-  # Prints author and comment text for each comment
-  i = 0 # Index when going through comments
-  for item in results["items"]:
+  for i, item in enumerate(results["items"]):
     text = item["snippet"]["textDisplay"]
     author = item["snippet"]["authorDisplayName"]
 
@@ -140,22 +139,21 @@ def print_prepared_comments(check_video_id_localprep, comments, j, logMode):
     videoID = convert_comment_id_to_video_id(comments[i])
 
     # Prints comment info to console
-    print(str(j+1) + ". " + author + ":  " + text)
+    print(f"{str(j + 1)}. {author}:  {text}")
 
     if check_video_id_localprep is None:  # Only print video title if searching entire channel
       title = get_video_title(videoID) # Get Video Title
-      print("     > Video: " + title)
+      print(f"     > Video: {title}")
     print("     > Direct Link: " + "https://www.youtube.com/watch?v=" + videoID + "&lc=" + comments[i] + "\n")
 
     # If logging enabled, also prints to log file
     if logMode == True:
-      logFile.write(str(j+1) + ". " + author + ":  " + text + "\n")
+      logFile.write(f"{str(j + 1)}. {author}:  {text}" + "\n")
       if check_video_id_localprep is None:  # Only print video title if searching entire channel
         title = get_video_title(videoID) # Get Video Title
-        logFile.write("     > Video: " + title + "\n")
+        logFile.write(f"     > Video: {title}" + "\n")
       logFile.write("     > Direct Link: " + "https://www.youtube.com/watch?v=" + videoID + "&lc=" + comments[i] + "\n\n")
 
-    i += 1
     j +=1
 
   return j
@@ -174,7 +172,7 @@ def get_comments(youtube, filterMode, check_video_id=None, check_channel_id=None
 
   if filterMode == 1: # User entered spammer IDs -- Get Extra Info: None
     fieldsToFetch = "nextPageToken,items/snippet/topLevelComment/id,items/snippet/totalReplyCount,items/snippet/topLevelComment/snippet/videoId,items/snippet/topLevelComment/snippet/authorChannelId/value"
-  if filterMode == 2 or filterMode == 4: # Filter char by Username / Auto Regex non-ascii username -- Get Extra Info: Author Display Name
+  if filterMode in [2, 4]: # Filter char by Username / Auto Regex non-ascii username -- Get Extra Info: Author Display Name
     fieldsToFetch = "nextPageToken,items/snippet/topLevelComment/id,items/snippet/totalReplyCount,items/snippet/topLevelComment/snippet/videoId,items/snippet/topLevelComment/snippet/authorChannelId/value,items/snippet/topLevelComment/snippet/authorDisplayName"
   if filterMode == 3: # Filter char by Comment text -- Get Extra Info: Comment Text
     fieldsToFetch = "nextPageToken,items/snippet/topLevelComment/id,items/snippet/totalReplyCount,items/snippet/topLevelComment/snippet/videoId,items/snippet/topLevelComment/snippet/authorChannelId/value,items/snippet/topLevelComment/snippet/textDisplay"
@@ -190,9 +188,8 @@ def get_comments(youtube, filterMode, check_video_id=None, check_channel_id=None
       fields=fieldsToFetch,
       textFormat="plainText"
     ).execute()
-  
-  # Get all comment threads across the whole channel
-  elif check_video_id is None:
+
+  else:
     results = youtube.commentThreads().list(
       part="snippet",
       allThreadsRelatedToChannelId=check_channel_id,
@@ -207,7 +204,7 @@ def get_comments(youtube, filterMode, check_video_id=None, check_channel_id=None
     RetrievedNextPageToken = results["nextPageToken"]
   except KeyError:
     RetrievedNextPageToken = "End"  
- 
+
   # After getting all comments threads for page, extracts data for each and stores matches in spamCommentsID
   # Also goes through each thread and execuites get_replies() to get reply content and matches
   for item in results["items"]:
@@ -222,7 +219,7 @@ def get_comments(youtube, filterMode, check_video_id=None, check_channel_id=None
 
     # Need to be able to catch exceptions because sometimes the API will return a comment from non-existent / deleted channel
     # Need individual tries because not all are fetched for each mode
-    if filterMode == 2 or filterMode == 4:
+    if filterMode in [2, 4]:
       try:
         authorChannelName = comment["snippet"]["authorDisplayName"]
       except KeyError:
@@ -232,7 +229,7 @@ def get_comments(youtube, filterMode, check_video_id=None, check_channel_id=None
         commentText = comment["snippet"]["textDisplay"]
       except KeyError:
         commentText = "[Deleted/Missing Comment]"
-    
+
     # Runs check against comment info for whichever filter data is relevant
     check_against_filter(filterMode, parent_id, videoID, inputtedSpammerChannelID, inputtedUsernameFilter, inputtedCommentTextFilter, authorChannelID, authorChannelName, commentText, regexPattern)
     scannedCommentsCount += 1  # Counts number of comments scanned, add to global count
@@ -241,7 +238,7 @@ def get_comments(youtube, filterMode, check_video_id=None, check_channel_id=None
       get_replies(filterMode, parent_id, videoID, inputtedSpammerChannelID, inputtedUsernameFilter, inputtedCommentTextFilter, regexPattern)
     else:
       print_count_stats(final=False)  # Updates displayed stats if no replies
-  
+
   return RetrievedNextPageToken
 
 
@@ -255,10 +252,10 @@ def get_replies(filterMode, parent_id, videoID, inputtedSpammerChannelID=None, i
   # Initialize some variables
   authorChannelName = None
   commentText = None
-  
+
   if filterMode == 1: # User entered spammer IDs -- Get Extra Info: None
     fieldsToFetch = "items/snippet/authorChannelId/value,items/id"
-  elif filterMode == 2 or filterMode == 4: # Filter by Username -- Get Extra Info: Author Display Name
+  elif filterMode in [2, 4]: # Filter by Username -- Get Extra Info: Author Display Name
     fieldsToFetch = "items/snippet/authorChannelId/value,items/id,items/snippet/authorDisplayName"
   elif filterMode == 3: # Filter by comment text -- Get Extra Info: Comment Text
     fieldsToFetch = "items/snippet/authorChannelId/value,items/id,items/snippet/textDisplay"
@@ -270,23 +267,23 @@ def get_replies(filterMode, parent_id, videoID, inputtedSpammerChannelID=None, i
     fields=fieldsToFetch,
     textFormat="plainText"
   ).execute()
- 
+
   # Iterates through items in results
   # Need to be able to catch exceptions because sometimes the API will return a comment from non-existent / deleted channel
   # Need individual tries because not all are fetched for each mode
-  for item in results["items"]:  
+  for item in results["items"]:
     replyID = item["id"]
     try:
       authorChannelID = item["snippet"]["authorChannelId"]["value"]
     except KeyError:
       authorChannelID = "[Deleted Channel]"
 
-    if filterMode == 2 or filterMode == 4: 
+    if filterMode in [2, 4]: 
       try:
         authorChannelName = item["snippet"]["authorDisplayName"]
       except KeyError:
         authorChannelName = "[Deleted Channel]"  
-    
+
     if filterMode == 3:
       try:
         commentText = item["snippet"]["textDisplay"]
@@ -343,60 +340,64 @@ def check_against_filter(filterMode, commentID, videoID, inputtedSpammerChannelI
 # Takes in dictionary of comment IDs to delete, breaks them into 50-comment chunks, and deletes them in groups
 def delete_found_comments(commentsDictionary,banChoice):
 
-    # Deletes specified comment IDs
-    def delete(commentIDs):
-        youtube.comments().setModerationStatus(id=commentIDs, moderationStatus="rejected", banAuthor=banChoice).execute()
+  # Deletes specified comment IDs
+  def delete(commentIDs):
+      youtube.comments().setModerationStatus(id=commentIDs, moderationStatus="rejected", banAuthor=banChoice).execute()
 
-    commentsList = list(commentsDictionary.keys())  # Takes comment IDs out of dictionary and into list
-    total = len(commentsList)
-    deletedCounter = 0  
-    def print_progress(d, t): print("Deleting Comments... - Progress: [" + str(d) + " / " + str(t) + "] (In Groups of 50)", end="\r") # Prints progress of deletion
-    print_progress(deletedCounter, total)
+  commentsList = list(commentsDictionary.keys())  # Takes comment IDs out of dictionary and into list
+  total = len(commentsList)
+  deletedCounter = 0
+  def print_progress(d, t):
+    print(
+        f"Deleting Comments... - Progress: [{str(d)} / {str(t)}] (In Groups of 50)",
+        end="\r",
+    )
 
-    if total > 50:                                  # If more than 50 comments, break into chunks of 50
-        remainder = total % 50                      # Gets how many left over after dividing into chunks of 50
-        numDivisions = int((total-remainder)/50)    # Gets how many full chunks of 50 there are
-        for i in range(numDivisions):               # Loops through each full chunk of 50
-            delete(commentsList[i*50:i*50+50])
-            deletedCounter += 50
-            print_progress(deletedCounter, total)
-        if remainder > 0:
-            delete(commentsList[numDivisions*50:total]) # Deletes any leftover comments range after last full chunk
-            deletedCounter += remainder
-            print_progress(deletedCounter, total)
-    else:
-        delete(commentsList)
-        print_progress(deletedCounter, total)
-    print("Comments Deleted! Will now verify each is gone.                          \n")
+  print_progress(deletedCounter, total)
+
+  if total > 50:                                  # If more than 50 comments, break into chunks of 50
+      remainder = total % 50                      # Gets how many left over after dividing into chunks of 50
+      numDivisions = int((total-remainder)/50)    # Gets how many full chunks of 50 there are
+      for i in range(numDivisions):               # Loops through each full chunk of 50
+          delete(commentsList[i*50:i*50+50])
+          deletedCounter += 50
+          print_progress(deletedCounter, total)
+      if remainder > 0:
+          delete(commentsList[numDivisions*50:total]) # Deletes any leftover comments range after last full chunk
+          deletedCounter += remainder
+          print_progress(deletedCounter, total)
+  else:
+      delete(commentsList)
+      print_progress(deletedCounter, total)
+  print("Comments Deleted! Will now verify each is gone.                          \n")
 
 # Takes in dictionary of comment IDs and video IDs, and checks if comments still exist individually
 def check_deleted_comments(commentsDictionary):
-    i = 0 # Count number of remaining comments
-    j = 1 # Count number of checked
-    total = len(commentsDictionary)
-    for key, value in commentsDictionary.items():
-        results = youtube.comments().list(
-            part="snippet",
-            id=key,  
-            maxResults=1,
-            fields="items",
-            textFormat="plainText"
-        ).execute()
-        print("Verifying Deleted Comments: [" + str(j) + " / " + str(total) + "]", end="\r")
-        j += 1
+  i = 0 # Count number of remaining comments
+  total = len(commentsDictionary)
+  for j, (key, value) in enumerate(commentsDictionary.items(), start=1):
+    results = youtube.comments().list(
+        part="snippet",
+        id=key,  
+        maxResults=1,
+        fields="items",
+        textFormat="plainText"
+    ).execute()
+    print(f"Verifying Deleted Comments: [{str(j)} / {total}]", end="\r")
+    if results["items"]:  # Check if the items result is empty
+      print(
+          f"Possible Issue Deleting Comment: {str(key)} |  Check Here: https://www.youtube.com/watch?v={str(value)}&lc={str(key)}"
+      )
+      i += 1
 
-        if results["items"]:  # Check if the items result is empty
-            print("Possible Issue Deleting Comment: " + str(key) + " |  Check Here: " + "https://www.youtube.com/watch?v=" + str(value) + "&lc=" + str(key))
-            i += 1
+  if i == 0:
+      print("\n\nSuccess: All spam comments should be gone.")
+  elif i > 0:
+      print("\n\nWarning: " + str(i) + " spam comments may remain. Check links above or try running the program again.")
+  else:
+      print("\n\nSomething strange happened... The comments may or may have not been deleted.")
 
-    if i == 0:
-        print("\n\nSuccess: All spam comments should be gone.")
-    elif i > 0:
-        print("\n\nWarning: " + str(i) + " spam comments may remain. Check links above or try running the program again.")
-    else:
-        print("\n\nSomething strange happened... The comments may or may have not been deleted.")
-
-    return None
+  return None
 
 
 
@@ -413,10 +414,8 @@ def get_video_title(video_id):
     fields="items/snippet/title",
     maxResults=1
   ).execute()
-  
-  title = results["items"][0]["snippet"]["title"]
 
-  return title
+  return results["items"][0]["snippet"]["title"]
 
 ############################# GET CHANNEL ID FROM VIDEO ID #####################################
 # Get channel ID from video ID using YouTube API request
@@ -427,10 +426,8 @@ def get_channel_id(video_id):
     fields="items/snippet/channelId",
     maxResults=1
   ).execute()
-  
-  channel_id = results["items"][0]["snippet"]["channelId"]
 
-  return channel_id
+  return results["items"][0]["snippet"]["channelId"]
 
 ############################# GET CURRENTLY LOGGED IN USER #####################################
 # Get channel ID and channel title of the currently authorized user
@@ -445,6 +442,7 @@ def get_current_user():
       fields="items/id,items/snippet/title"
     ).execute()
     return results
+
   results = fetch()  
 
   # Fetch the channel ID and title from the API response
@@ -462,33 +460,38 @@ def get_current_user():
       channelTitle = results["items"][0]["snippet"]["title"] # If channel ID was found, but not channel title/name
     except KeyError:
       print("Error Getting Current User: Channel ID was found, but channel title was not retrieved. If this occurs again, try deleting 'token.pickle' file and re-running. If that doesn't work, consider filing a bug report on the GitHub project 'issues' page.")
-      print("    > NOTE: The program may still work - You can try continuing. Just check the channel ID is correct: " + str(channelID))
+      print(
+          f"    > NOTE: The program may still work - You can try continuing. Just check the channel ID is correct: {str(channelID)}"
+      )
       channelTitle = ""
       input("Press Enter to Continue...")
-      pass
   except KeyError:
     traceback.print_exc()
     print("\nError: Still unable to get channel info. Big Bruh Moment. Try deleting token.pickle. The info above might help if you want to report a bug.")
     input("\nPress Enter to Exit...")
-    
+
 
   return channelID, channelTitle
 
 ################################# VIDEO ID LOOKUP ##############################################
 # Using comment ID, get corresponding video ID from dictionary variable
 def convert_comment_id_to_video_id(comment_id):
-  video_id = vidIdDict[comment_id]
-  return video_id
+  return vidIdDict[comment_id]
 
 ##################################### PRINT STATS ##########################################
 
 # Prints Scanning Statistics, can be version that overwrites itself or one that finalizes and moves to next line
 def print_count_stats(final):
   if final == True:
-    print("Top Level Comments Scanned: " + str(scannedCommentsCount) + " | Replies Scanned: " + str(scannedRepliesCount) + " | Matches Found So Far: " +  str(len(spamCommentsID)) + "\n")
+    print(
+        f"Top Level Comments Scanned: {str(scannedCommentsCount)} | Replies Scanned: {str(scannedRepliesCount)} | Matches Found So Far: {len(spamCommentsID)}"
+        + "\n")
   else:
-    print("Top Level Comments Scanned: " + str(scannedCommentsCount) + " | Replies Scanned: " + str(scannedRepliesCount) + " | Matches Found So Far: " +  str(len(spamCommentsID)), end = "\r")
-  
+    print(
+        f"Top Level Comments Scanned: {str(scannedCommentsCount)} | Replies Scanned: {str(scannedRepliesCount)} | Matches Found So Far: {len(spamCommentsID)}",
+        end="\r",
+    )
+
   return None
 
 ##################################### VALIDATE VIDEO ID #####################################
@@ -499,7 +502,7 @@ def validate_video_id(inputted_video):
   if "/watch?" in inputted_video:
     startIndex = 0
     endIndex = 0
-    
+
     if "?v=" in inputted_video:
       startIndex = inputted_video.index("?v=") + 3
     elif "&v=" in inputted_video:
@@ -509,7 +512,7 @@ def validate_video_id(inputted_video):
       endIndex = inputted_video.index("&")
     else:
       endIndex = len(inputted_video)
-  
+
     if startIndex != 0 and endIndex != 0 and startIndex < endIndex and endIndex <= len(inputted_video):
       isolatedVideoID = inputted_video[startIndex:endIndex]
 
@@ -527,12 +530,10 @@ def validate_video_id(inputted_video):
   else: 
     isolatedVideoID = inputted_video
 
-  if len(isolatedVideoID) != 11:
-    print("\nInvalid Video link or ID! Video IDs are 11 characters long.")
-    return False, None
-
-  else:
+  if len(isolatedVideoID) == 11:
     return True, isolatedVideoID
+  print("\nInvalid Video link or ID! Video IDs are 11 characters long.")
+  return False, None
 
 ##################################### VALIDATE CHANNEL ID ##################################
 # Checks if channel ID is correct length and in correct format - if so returns True
@@ -543,11 +544,11 @@ def validate_channel_id(inputted_channel):
   if "/channel/" in inputted_channel:
     startIndex = inputted_channel.rindex("/") + 1
     endIndex = len(inputted_channel)
-    
+
     if "?" in inputted_channel:
       endIndex = inputted_channel.rindex("?")
 
-    if startIndex < endIndex and endIndex <= len(inputted_channel):
+    if startIndex < endIndex <= len(inputted_channel):
       isolatedChannelID = inputted_channel[startIndex:endIndex]
 
   elif "/c/" in inputted_channel:
@@ -558,18 +559,17 @@ def validate_channel_id(inputted_channel):
     if startIndex != inputted_channel.rindex("/") + 1:
       endIndex = inputted_channel.rindex("/") # endIndex is now at the last /
 
-    if startIndex < endIndex and endIndex <= len(inputted_channel):
+    if startIndex < endIndex <= len(inputted_channel):
       customURL = inputted_channel[startIndex:endIndex]
       response = youtube.search().list(part="snippet",q=customURL, maxResults=1).execute()
       if response.get("items"):
           isolatedChannelID = response.get("items")[0]["snippet"]["channelId"] # Get channel ID from custom channel URL username
-  
-  # Handle legacy style custom URL (no /c/ for custom URL)
-  elif ("youtube.com" in inputted_channel) and ("/c/" and "/channel/" not in inputted_channel):
+
+  elif "youtube.com" in inputted_channel:
     startIndex = inputted_channel.rindex("/") + 1
     endIndex = len(inputted_channel)
 
-    if startIndex < endIndex and endIndex <= len(inputted_channel):
+    if startIndex < endIndex <= len(inputted_channel):
       customURL = inputted_channel[startIndex:endIndex]
       response = youtube.search().list(part="snippet",q=customURL, maxResults=1).execute()
       if response.get("items"):
@@ -578,11 +578,10 @@ def validate_channel_id(inputted_channel):
   else:
     isolatedChannelID = inputted_channel
 
-  if len(isolatedChannelID) == 24 and isolatedChannelID[0:2] == "UC":
+  if len(isolatedChannelID) == 24 and isolatedChannelID[:2] == "UC":
     return True, isolatedChannelID
-  else:
-    print("\nInvalid Channel link or ID! Channel IDs are 24 characters long and begin with 'UC'.")
-    return False, None
+  print("\nInvalid Channel link or ID! Channel IDs are 24 characters long and begin with 'UC'.")
+  return False, None
   
 ############################### User Choice #################################
 # User inputs Y/N for choice, returns True or False
@@ -591,11 +590,11 @@ def validate_channel_id(inputted_channel):
 def choice(message=""):
   # While loop until valid input
   valid = False
-  while valid == False:
+  while not valid:
     response = input("\n" + message + " (y/n): ")
-    if response == "Y" or response == "y":
+    if response in ["Y", "y"]:
       return True
-    elif response == "N" or response == "n":
+    elif response in ["N", "n"]:
       return False
     else:
       print("\nInvalid Input. Enter Y or N")
@@ -619,9 +618,9 @@ def process_spammer_ids(rawString):
   for i in range(len(inputList)):
     valid, IDList[i] = validate_channel_id(inputList[i])
     if valid == False:
-      print("Invalid Channel ID or Link: " + str(inputList[i]) + "\n")
+      print(f"Invalid Channel ID or Link: {str(inputList[i])}" + "\n")
       return False, None
-  
+
   return True, IDList
       
 ############################ Process Input Spammer IDs ###############################
@@ -709,12 +708,14 @@ def prepare_filter_mode_username(currentUser, deletionEnabledLocal, scanMode):
   print("Note: Letters and numbers will not be included for safety purposes, even if you enter them.")
   print("Example: 👋🔥✔️✨")
   validEntry = False
-  while validEntry == False:
+  while not validEntry:
     inputChars = input("Input the characters to search (no commas or spaces): ")
     inputChars = make_char_set(inputChars, stripLettersNumbers=True, stripKeyboardSpecialChars=False, stripPunctuation=False)
 
     if any(x in inputChars for x in channelChars):
-      print("WARNING! Character(s) you entered are within your own username, ' " + currentUserName + " '! : " + str(inputChars & channelChars))
+      print(
+          f"WARNING! Character(s) you entered are within your own username, ' {currentUserName} '! : {str(inputChars & channelChars)}"
+      )
       if scanMode == 1:
         print("Are you SURE you want to search your own comments? (You WILL still get a confirmation before deleting)")
         if choice("Choose") == True:
@@ -726,7 +727,9 @@ def prepare_filter_mode_username(currentUser, deletionEnabledLocal, scanMode):
         if choice("Continue?") == True:
           validEntry = True
     else:
-      print("Usernames will be scanned for ANY of these individual characters: " + str(inputChars))
+      print(
+          f"Usernames will be scanned for ANY of these individual characters: {str(inputChars)}"
+      )
       if choice("Begin scanning? ") == True:
         validEntry = True
         deletionEnabledLocal = "HalfTrue"
@@ -741,11 +744,13 @@ def prepare_filter_mode_comment_text(currentUser, deletionEnabledLocal, scanMode
   print("Note: Letters, numbers, and punctuation will not be included for safety purposes, even if you enter them.")
   print("Example: 👋🔥✔️✨")
   validEntry = False
-  while validEntry == False:
+  while not validEntry:
     inputChars = input("Input the characters to search (no commas or spaces): ")
     inputChars = make_char_set(inputChars, stripLettersNumbers=True, stripKeyboardSpecialChars=False, stripPunctuation=True)
 
-    print("Comment text will be scanned for ANY of these individual characters: " + str(inputChars))
+    print(
+        f"Comment text will be scanned for ANY of these individual characters: {str(inputChars)}"
+    )
     if choice("Begin scanning? ") == True:
       validEntry = True
       deletionEnabledLocal = "HalfTrue"
@@ -766,7 +771,7 @@ def prepare_filter_mode_non_ascii(currentUser, deletionEnabledLocal, scanMode):
   print("")
   # Get user input for mode selection, 
   confirmation = False
-  while confirmation == False:
+  while not confirmation:
     selection = input("Choose Mode: ")
     try: selection = int(selection) # If not number entered, will get caught later as invalid
     except: pass
@@ -809,12 +814,10 @@ def prepare_filter_mode_non_ascii(currentUser, deletionEnabledLocal, scanMode):
   elif selection == 3:
     autoModeName = "NUKE Mode (╯°□°)╯︵ ┻━┻ - Allow only letters, numbers, and spaces"
 
-  if confirmation == True:
-    deletionEnabledLocal = "HalfTrue"
-    return deletionEnabledLocal, regexPattern, autoModeName
-  else:
-    input("How did you get here? Something very strange went wrong. Press Enter to Exit...")
-    exit()
+  if confirmation:
+    return "HalfTrue", regexPattern, autoModeName
+  input("How did you get here? Something very strange went wrong. Press Enter to Exit...")
+  exit()
 
 ##########################################################################################
 ##########################################################################################
